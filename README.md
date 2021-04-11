@@ -5,9 +5,9 @@ Play with it: [![Open In Colab](https://colab.research.google.com/assets/colab-b
 
 It is actually highly based on the ideas from [Multilingual Unsupervised Sentence Simplification](https://arxiv.org/abs/2005.00352).
 
-Basically, it's mBART finetuned on the paraphrases from [ParaPhraserPlus](http://paraphraser.ru/download/) and [automatically translated WikiLarge](https://github.com/dialogue-evaluation/RuSimpleSentEval#данные) conditioned on some control tokens.
+Basically, it's mBART finetuned on the paraphrases from [ParaPhraserPlus](http://paraphraser.ru/download/) and [automatically translated WikiLarge](https://github.com/dialogue-evaluation/RuSimpleSentEval#данные) conditioned on specific control tokens.
 
-The control tokens give us ability to train the model on everything that is semantically related, and then to choose those control token values which work the best for simplification (according to some metric).
+The control tokens give us ability to train the model on everything that is semantically related and then to choose those control token values which work better for simplification (according to some metric).
 
 The following control tokens were implemented:
 - Levenshtein similarity - how similar (obviously by levenshtein metric) the result text should be;
@@ -23,7 +23,7 @@ The following control tokens were implemented:
 ## Train
 The training process consist of the following steps.
 
-## Requirements Installation
+### Requirements Installation
 The instructions are based on the [baseline solution](https://github.com/dialogue-evaluation/RuSimpleSentEval#базовое-решение).
 
 1. Install SentencePiece:
@@ -83,8 +83,10 @@ wget https://dl.fbaipublicfiles.com/fairseq/models/mbart/mbart.cc25.v2.tar.gz
 tar -xzvf mbart.cc25.v2.tar.gz -C ../data
 ```
 
-## Data Preprocessing
-Everything here is written in the assumption that you are running it from the `solution` folder.
+### Data Preprocessing
+Everything here is written in the assumption that you are running it from the `solution` folder.  
+Btw, you can skip the first five steps and use the data from the [downloads](https://github.com/DanAnastasyev/RuSimpleSentEval#downloads) section.
+
 1. Specify the following environment variables:
 ```bash
 SPM=<path to sentencepiece>
@@ -174,10 +176,14 @@ cat model_prediction.txt | grep -P "^H" |sort -V |cut -f 3- > model_prediction.h
 ```bash
 python generate_devs_with_control_tokens.py
 ```
+The script generates lots of lines of dev set conditioned on different control tokens. Generate the simplifications for them from your model and evaluate them using `easse evaluate` script. Find the best params this way.
 
 I used the following params:
-- NbChars=0.95;
-- LevSim=0.4; 
-- WordRank_1.6.
+```
+NbChars  = 0.95
+LevSim   = 0.4 
+WordRank = 1.6
+```
 
-To be honest, the model hallucinate a lot in such setup, but SARI prefers it to any other (more sane in my opition) combination of tokens...
+To be honest, the model hallucinate a lot in such setup, but SARI prefers it to any other (more sane in my opition) combination of tokens...  
+Better control tokens could have been selected using some human evaluation if it wasn't so expensive, ofc.
