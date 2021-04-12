@@ -5,7 +5,7 @@ Play with it: [![Open In Colab](https://colab.research.google.com/assets/colab-b
 
 It is actually highly based on the ideas from [Multilingual Unsupervised Sentence Simplification](https://arxiv.org/abs/2005.00352).
 
-Basically, it's mBART finetuned on the paraphrases from [ParaPhraserPlus](http://paraphraser.ru/download/) and [automatically translated WikiLarge](https://github.com/dialogue-evaluation/RuSimpleSentEval#данные) conditioned on specific control tokens.
+Basically, it's mBART finetuned on the paraphrases from [ParaPhraserPlus](http://paraphraser.ru/download/) and [automatically translated WikiSimple](https://github.com/dialogue-evaluation/RuSimpleSentEval#данные) conditioned on specific control tokens.
 
 The control tokens give us ability to train the model on everything that is semantically related and then to choose those control token values which work better for simplification (according to some metric).
 
@@ -63,11 +63,13 @@ index 8710b7f..a7ff1db 100644
 ```
 [here](https://github.com/pytorch/fairseq/blob/c2e8904b6072d8eddab362ac50b324e374b5951d/fairseq/tasks/translation_from_pretrained_bart.py#L54), but I have no idea whether you still need it in your (newer) version of fairseq.
 
-3. I stored everything in `data` folder and run my scripts from `solution` folder, so the hierarchy looks this way:
+3. I stored everything in the `data` folder and run my scripts from the `solution` folder, so the hierarchy looks this way:
 ```
 - data/
--- data/preprocessed_data/
 -- data/data-bin/
+-- data/ParaPhraserPlus
+-- data/preprocessed_data/
+-- data/WikiSimple-translated
 - solution/
 ```
 
@@ -84,8 +86,8 @@ tar -xzvf mbart.cc25.v2.tar.gz -C ../data
 ```
 
 ### Data Preprocessing
-Everything here is written in the assumption that you are running it from the `solution` folder.  
-Btw, you can skip the first five steps and use the data from the [downloads](https://github.com/DanAnastasyev/RuSimpleSentEval#downloads) section.
+Everything here is written in the assumption that you are running it from the `solution` folder. Sorry, I was a bit lazy to configure it ~anyhow~ better.  
+However, you can skip these steps and use the data from the [downloads](https://github.com/DanAnastasyev/RuSimpleSentEval#downloads) section.
 
 1. Specify the following environment variables:
 ```bash
@@ -96,7 +98,14 @@ PREPROCESSED_DATA_DIR=../data/data-bin
 DICT=../data/mbart.cc25.v2/dict.txt
 ```
 
-2. Preprocess everything with sentencepiece:
+2. Prepare data: download [ParaPhraserPlus](http://paraphraser.ru/download/) and [automatically translated WikiSimple](https://github.com/dialogue-evaluation/RuSimpleSentEval#данные) and extract them to the `data` folder. Run:
+```bash
+python prepare_control_tokens.py
+python merge_data.py
+```
+to prepare data.
+
+3. Preprocess everything with sentencepiece:
 ```bash
 ${SPM} --model=${BPE_MODEL} < ${DATA_DIR}/train.src > ${DATA_DIR}/train.spm.src &
 ${SPM} --model=${BPE_MODEL} < ${DATA_DIR}/valid.src > ${DATA_DIR}/valid.spm.src &
@@ -104,13 +113,13 @@ ${SPM} --model=${BPE_MODEL} < ${DATA_DIR}/train.dst > ${DATA_DIR}/train.spm.dst 
 ${SPM} --model=${BPE_MODEL} < ${DATA_DIR}/valid.dst > ${DATA_DIR}/valid.spm.dst &
 ```
 
-3. Add the control tokens to the data:
+4. Add the control tokens to the data:
 ```bash
 python add_control_tokens.py
 ```
 It finds the control tokens for each `(src, dst)` pair and finds unused tokens from the dictionary that can be used for the conditioning. It would have been cleaner to use some new tokens for this purpose, but I didn't know for sure how to add new tokens to a model in fairseq, so I stuck to a hackier option.
 
-4. Run the binarization function:
+5. Run the binarization function:
 ```bash
 fairseq-preprocess \
   --source-lang src \
@@ -125,7 +134,8 @@ fairseq-preprocess \
   --workers 70
 ```
 
-5. Train:
+### Training
+1. Train:
 ```bash
 PRETRAIN=../data/mbart.cc25.v2/model.pt
 langs=ar_AR,cs_CZ,de_DE,en_XX,es_XX,et_EE,fi_FI,fr_XX,gu_IN,hi_IN,it_IT,ja_XX,kk_KZ,ko_KR,lt_LT,lv_LV,my_MM,ne_NP,nl_XX,ro_RO,ru_RU,si_LK,tr_TR,vi_VN,zh_CN
@@ -156,7 +166,7 @@ fairseq-train ../data/data-bin \
 ```
 Find batch-size and update-freq that suits your gpu better, use fp16 whenever it's possible.
 
-6. Generate:
+2. Generate:
 ```bash
 CUDA_VISIBLE_DEVICES=0
 LANG=C.UTF-8 LC_ALL=C.UTF-8
@@ -172,7 +182,7 @@ fairseq-generate ${DATA_DIR} \
 cat model_prediction.txt | grep -P "^H" |sort -V |cut -f 3- > model_prediction.hyp
 ```
 
-7. Find the control tokens that work better. Generate data with random control token combinations and choose the best by SARI on the dev set:
+3. Find the control tokens that work better. Generate data with random control token combinations and choose the best by SARI on the dev set:
 ```bash
 python generate_devs_with_control_tokens.py
 ```
@@ -187,3 +197,9 @@ WordRank = 1.6
 
 To be honest, the model hallucinate a lot in such setup, but SARI prefers it to any other (more sane in my opition) combination of tokens...  
 Better control tokens could have been selected using some human evaluation if it wasn't so expensive, ofc.
+
+4. Preprocess the test dataset as in Data Preprocessing step 3 and run:
+```bash
+python generate_test_with_control_tokens.py
+```
+with your optimal tokens [here](https://github.com/DanAnastasyev/RuSimpleSentEval/blob/main/solution/generate_test_with_control_tokens.py#L16).
